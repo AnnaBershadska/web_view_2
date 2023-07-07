@@ -13,7 +13,7 @@ dependencies:
 
   onesignal_flutter: 3.5.1
   connectivity_plus: 3.0.2
-  flutter_smart_dialog: 4.6.2+1
+  flutter_smart_dialog: ^4.6.2+1
   appsflyer_sdk: 6.9.3
   webview_flutter: ^4.2.2
   firebase_remote_config: 4.1.0
