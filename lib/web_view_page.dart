@@ -70,9 +70,7 @@ class _WebViewPageState extends State<WebViewPage> {
     }
 
     _webViewController =
-        WebViewController.fromPlatformCreationParams(params, onPermissionRequest: (WebViewPermissionRequest request) {
-      log('Permission request');
-    })
+        WebViewController.fromPlatformCreationParams(params)
           ..setJavaScriptMode(JavaScriptMode.unrestricted)
           ..setBackgroundColor(const Color(0x00000000))
           ..setNavigationDelegate(
