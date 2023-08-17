@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +7,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_view_package/no_internet_page_creator.dart';
+import 'package:web_view_package/shared_prefs_checker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
@@ -34,8 +33,14 @@ class WebViewPage extends StatefulWidget {
   ///       );
   final Function(BuildContext context) navigateToWhite;
 
+  final String initialUrl;
+
   const WebViewPage(
-      {Key? key, required this.noInternetPageCreator, required this.forceWhiteUrl, required this.navigateToWhite})
+      {Key? key,
+      required this.noInternetPageCreator,
+      required this.forceWhiteUrl,
+      required this.navigateToWhite,
+      required this.initialUrl})
       : super(key: key);
 
   static const routeName = '/webview';
@@ -47,7 +52,9 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
-  String? _uwr;
+  bool _isShowingTerms = false; // are we showing terms in widget right now
+  bool _needShowTerms = true; // if false we automatically go to white part when reach terms url
+  SharedPrefsChecker sharedPrefsChecker = SharedPrefsChecker();
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -58,7 +65,7 @@ class _WebViewPageState extends State<WebViewPage> {
     return false;
   }
 
-  void _createWebViewController(String url) {
+  void _createWebViewController() {
     final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
       params = WebKitWebViewControllerCreationParams(
@@ -69,23 +76,23 @@ class _WebViewPageState extends State<WebViewPage> {
       params = const PlatformWebViewControllerCreationParams();
     }
 
-    _webViewController =
-        WebViewController.fromPlatformCreationParams(params)
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..setBackgroundColor(const Color(0x00000000))
-          ..setNavigationDelegate(
-            NavigationDelegate(
-              onProgress: (int progress) {},
-              onPageStarted: (String url) {},
-              onPageFinished: (String url) {},
-              onWebResourceError: (WebResourceError error) {},
-              onNavigationRequest: _overrideUrlLoading,
-            ),
-          );
+    _webViewController = WebViewController.fromPlatformCreationParams(params)
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {},
+          onPageStarted: (String url) {},
+          onPageFinished: (String url) {},
+          onWebResourceError: (WebResourceError error) {},
+          onNavigationRequest: _overrideUrlLoading,
+        ),
+      );
 
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
-      AndroidWebViewController androidWebViewController = (_webViewController!.platform as AndroidWebViewController);
+      AndroidWebViewController androidWebViewController =
+          (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -94,12 +101,15 @@ class _WebViewPageState extends State<WebViewPage> {
         // Control and show your picker
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
-        final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+        final XFile? photo =
+            await picker.pickImage(source: ImageSource.gallery);
 
-        return photo?.path != null ? [Uri.file(photo!.path).toString()] : []; // Uris
+        return photo?.path != null
+            ? [Uri.file(photo!.path).toString()]
+            : []; // Uris
       });
     }
-    _webViewController?.loadRequest(Uri.parse(url));
+    _webViewController?.loadRequest(Uri.parse(widget.initialUrl));
   }
 
   @override
@@ -107,27 +117,27 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
+      _needShowTerms = await sharedPrefsChecker.isShowTermsView();
       await SystemChrome.setPreferredOrientations([]);
 
       var connectivityResult = await (Connectivity().checkConnectivity());
       if (connectivityResult == ConnectivityResult.none) {
         _showNoWifiDialog();
       } else {
-        _uwr = ModalRoute.of(context)?.settings.arguments as String;
         setState(() {
-          _createWebViewController(_uwr ?? '');
+          _createWebViewController();
         });
       }
 
-      subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      subscription = Connectivity()
+          .onConnectivityChanged
+          .listen((ConnectivityResult result) {
         if (result == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
-          if (_uwr == null && _webViewController == null) {
+          if (_webViewController == null) {
             setState(() {
-              _uwr = ModalRoute.of(context)?.settings.arguments as String;
-              // _needShow = true; //TODO discuss, check intial version of the app
-              _createWebViewController(_uwr ?? '');
+              _createWebViewController();
             });
           }
           SmartDialog.dismiss();
@@ -158,34 +168,30 @@ class _WebViewPageState extends State<WebViewPage> {
                     )
                   : const SizedBox(),
             ),
-            //TODO
-            // if (!_needShow) ...[
-            //   Scaffold(
-            //     backgroundColor: const Color(0xFF0E0065),
-            //     body:
-            //         Center(
-            //           child: SizedBox(
-            //             height: 188,
-            //             width: 188,
-            //             child: Image.asset(
-            //               Assets.assetsLogo,
-            //             ),
-            //           ),
-            //         ),
-            //   ),
-            // ],
+            if (_isShowingTerms)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: TextButton(
+                    onPressed: () {
+                      sharedPrefsChecker.setShowTermsView(false);
+                      widget.navigateToWhite(context);
+                    },
+                    child: const Text('Accept')),
+              )
           ],
         ),
       ),
     );
   }
 
-  Future<NavigationDecision> _overrideUrlLoading(NavigationRequest request) async {
+  Future<NavigationDecision> _overrideUrlLoading(
+      NavigationRequest request) async {
     var url = request.url.toString();
 
     var uri = Uri.parse(url);
 
-    if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
+    if (!["http", "https", "file", "chrome", "data", "javascript", "about"]
+        .contains(uri.scheme)) {
       if (await canLaunchUrl(uri)) {
         // Launch the App
         await launchUrl(uri);
@@ -195,8 +201,23 @@ class _WebViewPageState extends State<WebViewPage> {
       return NavigationDecision.prevent;
     }
 
+    if (url.contains('terms')) {
+      if (_needShowTerms) {
+        setState(() {
+          _isShowingTerms = true;
+        });
+        return NavigationDecision.navigate;
+      } else {
+        if (context.mounted) {
+          widget.navigateToWhite(context);
+        }
+        return NavigationDecision.prevent;
+      }
+    }
+
     if (url.contains(widget.forceWhiteUrl)) {
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      await SystemChrome.setPreferredOrientations(
+          [DeviceOrientation.portraitUp]);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
@@ -211,11 +232,6 @@ class _WebViewPageState extends State<WebViewPage> {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SmartDialog.show<String>(
       builder: (_) => widget.noInternetPageCreator.createNoInternetPage(() {
-        if (_uwr == null) {
-          setState(() {
-            _uwr = ModalRoute.of(context)?.settings.arguments as String;
-          });
-        }
         SmartDialog.dismiss();
       }),
       animationType: SmartAnimationType.centerFade_otherSlide,

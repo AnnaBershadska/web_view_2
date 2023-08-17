@@ -19,6 +19,7 @@ dependencies:
   firebase_remote_config: 4.1.0
   image_picker: ^0.8.8
   url_launcher: ^6.1.11
+  shared_preferences: 2.0.15
 
 dev_dependencies:
   flutter_test:
