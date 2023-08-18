@@ -53,7 +53,9 @@ class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
   bool _isShowingTerms = false; // are we showing terms in widget right now
-  bool _needShowTerms = true; // if false we automatically go to white part when reach terms url
+  // if false we automatically go to white part when reach terms url
+  bool _needShowTerms = true;
+  bool _termsAccepted = false;
   SharedPrefsChecker sharedPrefsChecker = SharedPrefsChecker();
 
   Future<bool> _onWillPop() async {
@@ -170,14 +172,91 @@ class _WebViewPageState extends State<WebViewPage> {
             ),
             if (_isShowingTerms)
               Align(
-                alignment: Alignment.bottomCenter,
-                child: TextButton(
-                    onPressed: () {
-                      sharedPrefsChecker.setShowTermsView(false);
-                      widget.navigateToWhite(context);
-                    },
-                    child: const Text('Accept')),
-              )
+                alignment: Alignment.topCenter,
+                child: AppBar(
+                  title: const Text(
+                    'Terms of use',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xff484040)),
+                  ),
+                  backgroundColor: Colors.white,
+                ),
+              ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                color: const Color(0xffF2F2F7),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Transform.scale(
+                          scale: 1.3,
+                          child: Checkbox(
+                              activeColor: Color(0xFF29B550),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4.0),
+                              ),
+                              side: MaterialStateBorderSide.resolveWith(
+                                (states) => BorderSide(
+                                    width: 2.0, color: Color(0xFF29B550)),
+                              ),
+                              value: _termsAccepted,
+                              onChanged: (bool? value) {
+                                setState(() {
+                                  _termsAccepted = value ?? false;
+                                });
+                              }),
+                        ),
+                        const Text(
+                          'Agree with Terms of use',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xff484040),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 12,
+                    ),
+                    InkWell(
+                      onTap: _termsAccepted
+                          ? () {
+                              sharedPrefsChecker.setShowTermsView(false);
+                              widget.navigateToWhite(context);
+                            }
+                          : null,
+                      child: Container(
+                        height: 55,
+                        width: 361,
+                        decoration: BoxDecoration(
+                          color: _termsAccepted
+                              ? const Color(0xff365BDC)
+                              : const Color(0xffD5D5DC),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Continue',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 34)
+                  ],
+                ),
+              ),
+            )
           ],
         ),
       ),
