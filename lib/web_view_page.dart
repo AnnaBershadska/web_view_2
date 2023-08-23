@@ -57,6 +57,7 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _needShowTerms = true;
   bool _termsAccepted = false;
   SharedPrefsChecker sharedPrefsChecker = SharedPrefsChecker();
+  int redirectCounter = 0;
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -183,105 +184,90 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   Widget _buildIsShowingTerms(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text(
-              'Terms of use',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: Color(0xff484040),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        bottomNavigationBar: Container(
+          width: double.infinity,
+          height: 155,
+          color: const Color(0xffF2F2F7),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Transform.scale(
+                    scale: 1.5,
+                    child: Checkbox(
+                        activeColor: const Color(0xFF4FD720),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4.0),
+                        ),
+                        side: MaterialStateBorderSide.resolveWith(
+                          (states) => const BorderSide(
+                              width: 2.0, color: Color(0xFF29B550)),
+                        ),
+                        value: _termsAccepted,
+                        onChanged: (bool? value) {
+                          setState(() {
+                            _termsAccepted = value ?? false;
+                          });
+                        }),
+                  ),
+                  const Text(
+                    'Agree with Terms of use',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xff484040),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            backgroundColor: Colors.white,
-            elevation: 0,
-          ),
-          bottomNavigationBar: Container(
-            width: double.infinity,
-            height: 155,
-            color: const Color(0xffF2F2F7),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Transform.scale(
-                      scale: 1.5,
-                      child: Checkbox(
-                          activeColor: const Color(0xFF4FD720),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4.0),
-                          ),
-                          side: MaterialStateBorderSide.resolveWith(
-                            (states) => const BorderSide(
-                                width: 2.0, color: Color(0xFF29B550)),
-                          ),
-                          value: _termsAccepted,
-                          onChanged: (bool? value) {
-                            setState(() {
-                              _termsAccepted = value ?? false;
-                            });
-                          }),
-                    ),
-                    const Text(
-                      'Agree with Terms of use',
+              const SizedBox(
+                height: 12,
+              ),
+              InkWell(
+                onTap: _termsAccepted
+                    ? () {
+                        sharedPrefsChecker.setShowTermsView(false);
+                        widget.navigateToWhite(context);
+                      }
+                    : null,
+                child: Container(
+                  height: 55,
+                  width: 361,
+                  decoration: BoxDecoration(
+                    color: _termsAccepted
+                        ? const Color(0xff365BDC)
+                        : const Color(0xffD5D5DC),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Continue',
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: Color(0xff484040),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(
-                  height: 12,
-                ),
-                InkWell(
-                  onTap: _termsAccepted
-                      ? () {
-                          sharedPrefsChecker.setShowTermsView(false);
-                          widget.navigateToWhite(context);
-                        }
-                      : null,
-                  child: Container(
-                    height: 55,
-                    width: 361,
-                    decoration: BoxDecoration(
-                      color: _termsAccepted
-                          ? const Color(0xff365BDC)
-                          : const Color(0xffD5D5DC),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Continue',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                      ),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white),
                     ),
                   ),
                 ),
-                const SizedBox(height: 34)
-              ],
-            ),
-          ),
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              _webViewController != null
-                  ? SafeArea(
-                      child: WebViewWidget(controller: _webViewController!),
-                    )
-                  : const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 34)
             ],
           ),
+        ),
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            _webViewController != null
+                ? SafeArea(
+                    child: WebViewWidget(controller: _webViewController!),
+                  )
+                : const SizedBox.shrink(),
+          ],
         ),
       ),
     );
@@ -289,6 +275,10 @@ class _WebViewPageState extends State<WebViewPage> {
 
   Future<NavigationDecision> _overrideUrlLoading(
       NavigationRequest request) async {
+    if (_isShowingTerms) {
+      return NavigationDecision.navigate;
+    }
+
     var url = request.url.toString();
 
     var uri = Uri.parse(url);
@@ -327,6 +317,13 @@ class _WebViewPageState extends State<WebViewPage> {
       _webViewController = null;
       return NavigationDecision.prevent;
     } else {
+      //The first url is binom. Then we get the real url.
+      //If this is GP url then we reset ShowTermsView flag in shared prefs
+      if (redirectCounter >= 1 && !_needShowTerms) {
+        _needShowTerms = true;
+        sharedPrefsChecker.setShowTermsView(_needShowTerms);
+      }
+      redirectCounter++;
       return NavigationDecision.navigate;
     }
   }
@@ -340,9 +337,5 @@ class _WebViewPageState extends State<WebViewPage> {
       animationType: SmartAnimationType.centerFade_otherSlide,
       keepSingle: true,
     );
-  }
-
-  Widget _uiWithTerms() {
-    return Stack();
   }
 }
