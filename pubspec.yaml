@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  onesignal_flutter: ^5.0.0
+  onesignal_flutter: 3.5.1
   connectivity_plus: 4.0.2
   flutter_smart_dialog: ^4.6.2+1
   appsflyer_sdk: 6.9.3
