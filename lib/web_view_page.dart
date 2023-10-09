@@ -129,7 +129,8 @@ class _WebViewPageState extends State<WebViewPage> {
       }
 
       subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) async {
-        if (result == ConnectivityResult.none) {
+        final connectivityResult = await (Connectivity().checkConnectivity());
+        if (connectivityResult == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
           if (_webViewController == null) {
