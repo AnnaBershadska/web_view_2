@@ -94,8 +94,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
-      AndroidWebViewController androidWebViewController =
-          (_webViewController!.platform as AndroidWebViewController);
+      AndroidWebViewController androidWebViewController = (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -104,12 +103,9 @@ class _WebViewPageState extends State<WebViewPage> {
         // Control and show your picker
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
-        final XFile? photo =
-            await picker.pickImage(source: ImageSource.gallery);
+        final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
 
-        return photo?.path != null
-            ? [Uri.file(photo!.path).toString()]
-            : []; // Uris
+        return photo?.path != null ? [Uri.file(photo!.path).toString()] : []; // Uris
       });
     }
     _webViewController?.loadRequest(Uri.parse(widget.initialUrl));
@@ -132,9 +128,7 @@ class _WebViewPageState extends State<WebViewPage> {
         });
       }
 
-      subscription = Connectivity()
-          .onConnectivityChanged
-          .listen((ConnectivityResult result) {
+      subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) async {
         if (result == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
@@ -144,6 +138,7 @@ class _WebViewPageState extends State<WebViewPage> {
             });
           }
           SmartDialog.dismiss();
+          await SystemChrome.setPreferredOrientations([]);
         }
       });
     });
@@ -157,9 +152,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _isShowingTerms
-        ? _buildIsShowingTerms(context)
-        : _buildGrPt(context);
+    return _isShowingTerms ? _buildIsShowingTerms(context) : _buildGrPt(context);
   }
 
   Widget _buildGrPt(BuildContext context) {
@@ -205,8 +198,7 @@ class _WebViewPageState extends State<WebViewPage> {
                           borderRadius: BorderRadius.circular(4.0),
                         ),
                         side: MaterialStateBorderSide.resolveWith(
-                          (states) => const BorderSide(
-                              width: 2.0, color: Color(0xFF29B550)),
+                          (states) => const BorderSide(width: 2.0, color: Color(0xFF29B550)),
                         ),
                         value: _termsAccepted,
                         onChanged: (bool? value) {
@@ -239,18 +231,13 @@ class _WebViewPageState extends State<WebViewPage> {
                   height: 55,
                   width: 361,
                   decoration: BoxDecoration(
-                    color: _termsAccepted
-                        ? const Color(0xff365BDC)
-                        : const Color(0xffD5D5DC),
+                    color: _termsAccepted ? const Color(0xff365BDC) : const Color(0xffD5D5DC),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Center(
                     child: Text(
                       'Continue',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
                     ),
                   ),
                 ),
@@ -273,8 +260,7 @@ class _WebViewPageState extends State<WebViewPage> {
     );
   }
 
-  Future<NavigationDecision> _overrideUrlLoading(
-      NavigationRequest request) async {
+  Future<NavigationDecision> _overrideUrlLoading(NavigationRequest request) async {
     if (_isShowingTerms) {
       return NavigationDecision.navigate;
     }
@@ -283,8 +269,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
     var uri = Uri.parse(url);
 
-    if (!["http", "https", "file", "chrome", "data", "javascript", "about"]
-        .contains(uri.scheme)) {
+    if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
       if (await canLaunchUrl(uri)) {
         // Launch the App
         await launchUrl(uri);
@@ -309,8 +294,7 @@ class _WebViewPageState extends State<WebViewPage> {
     }
 
     if (url.contains(widget.forceWhiteUrl)) {
-      await SystemChrome.setPreferredOrientations(
-          [DeviceOrientation.portraitUp]);
+      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
