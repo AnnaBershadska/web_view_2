@@ -18,7 +18,7 @@ dependencies:
   webview_flutter: ^4.2.2
   firebase_remote_config: 4.1.0
   image_picker: ^1.0.4
-  url_launcher: ^6.1.14
+  url_launcher: ^6.1.11
   shared_preferences: ^2.2.1
 
 dev_dependencies:
