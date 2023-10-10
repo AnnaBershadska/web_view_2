@@ -132,16 +132,18 @@ class _WebViewPageState extends State<WebViewPage> {
       subscription = Connectivity().onConnectivityChanged.listen((_) async {
         await Future.delayed(const Duration(seconds: 1));
         final hasInternet = await InternetHelper.checkInternetConnection();
-        if (hasInternet) {
-          if (_webViewController == null) {
-            setState(() {
-              _createWebViewController();
-            });
+        if (mounted) {
+          if (hasInternet) {
+            if (_webViewController == null) {
+              setState(() {
+                _createWebViewController();
+              });
+            }
+            SmartDialog.dismiss();
+            await SystemChrome.setPreferredOrientations([]);
+          } else {
+            _showNoWifiDialog();
           }
-          SmartDialog.dismiss();
-          await SystemChrome.setPreferredOrientations([]);
-        } else {
-          _showNoWifiDialog();
         }
       });
     });
