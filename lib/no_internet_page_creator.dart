@@ -1,7 +1,6 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:web_view_package/internet_helper.dart';
 
 abstract class NoInternetPageCreator {
   NoInternetPageCreator();
@@ -11,10 +10,9 @@ abstract class NoInternetPageCreator {
   Widget createNoInternetPage(final VoidCallback onConnectedCallback);
 
   void onTap(final VoidCallback onConnectedCallback) async {
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    if (connectivityResult != ConnectivityResult.none) {
+    final hasInternet = await InternetHelper.checkInternetConnection();
+    if (hasInternet) {
       onConnectedCallback();
-      // SmartDialog.dismiss();
       await SystemChrome.setPreferredOrientations([]);
     }
   }
