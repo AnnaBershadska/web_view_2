@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web_view_package/internet_helper.dart';
 import 'package:web_view_package/no_internet_page_creator.dart';
 import 'package:web_view_package/shared_prefs_checker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -119,19 +120,18 @@ class _WebViewPageState extends State<WebViewPage> {
       _needShowTerms = await sharedPrefsChecker.isShowTermsView();
       await SystemChrome.setPreferredOrientations([]);
 
-      var connectivityResult = await (Connectivity().checkConnectivity());
-      if (connectivityResult == ConnectivityResult.none) {
-        _showNoWifiDialog();
-      } else {
+      final hasInternet = await InternetHelper.checkInternetConnection();
+      if (hasInternet) {
         setState(() {
           _createWebViewController();
         });
+      } else {
+        _showNoWifiDialog();
       }
 
-      subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) async {
-        if (result == ConnectivityResult.none) {
-          _showNoWifiDialog();
-        } else {
+      subscription = Connectivity().onConnectivityChanged.listen((_) async {
+        final hasInternet = await InternetHelper.checkInternetConnection();
+        if (hasInternet) {
           if (_webViewController == null) {
             setState(() {
               _createWebViewController();
@@ -139,6 +139,8 @@ class _WebViewPageState extends State<WebViewPage> {
           }
           SmartDialog.dismiss();
           await SystemChrome.setPreferredOrientations([]);
+        } else {
+          _showNoWifiDialog();
         }
       });
     });
