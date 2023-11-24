@@ -35,7 +35,10 @@ class WebViewPage extends StatefulWidget {
   final Function(BuildContext context) navigateToWhite;
 
   const WebViewPage(
-      {Key? key, required this.noInternetPageCreator, required this.forceWhiteUrl, required this.navigateToWhite})
+      {Key? key,
+      required this.noInternetPageCreator,
+      required this.forceWhiteUrl,
+      required this.navigateToWhite})
       : super(key: key);
 
   static const routeName = '/webview';
@@ -59,6 +62,9 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _createWebViewController(String url) {
+    if (context.mounted && url == widget.forceWhiteUrl) {
+      widget.navigateToWhite(context);
+    }
     final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
       params = WebKitWebViewControllerCreationParams(
@@ -69,23 +75,23 @@ class _WebViewPageState extends State<WebViewPage> {
       params = const PlatformWebViewControllerCreationParams();
     }
 
-    _webViewController =
-        WebViewController.fromPlatformCreationParams(params)
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..setBackgroundColor(const Color(0x00000000))
-          ..setNavigationDelegate(
-            NavigationDelegate(
-              onProgress: (int progress) {},
-              onPageStarted: (String url) {},
-              onPageFinished: (String url) {},
-              onWebResourceError: (WebResourceError error) {},
-              onNavigationRequest: _overrideUrlLoading,
-            ),
-          );
+    _webViewController = WebViewController.fromPlatformCreationParams(params)
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {},
+          onPageStarted: (String url) {},
+          onPageFinished: (String url) {},
+          onWebResourceError: (WebResourceError error) {},
+          onNavigationRequest: _overrideUrlLoading,
+        ),
+      );
 
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
-      AndroidWebViewController androidWebViewController = (_webViewController!.platform as AndroidWebViewController);
+      AndroidWebViewController androidWebViewController =
+          (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -94,9 +100,12 @@ class _WebViewPageState extends State<WebViewPage> {
         // Control and show your picker
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
-        final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+        final XFile? photo =
+            await picker.pickImage(source: ImageSource.gallery);
 
-        return photo?.path != null ? [Uri.file(photo!.path).toString()] : []; // Uris
+        return photo?.path != null
+            ? [Uri.file(photo!.path).toString()]
+            : []; // Uris
       });
     }
     _webViewController?.loadRequest(Uri.parse(url));
@@ -119,14 +128,15 @@ class _WebViewPageState extends State<WebViewPage> {
         });
       }
 
-      subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      subscription = Connectivity()
+          .onConnectivityChanged
+          .listen((ConnectivityResult result) {
         if (result == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
           if (_uwr == null && _webViewController == null) {
             setState(() {
               _uwr = ModalRoute.of(context)?.settings.arguments as String;
-              // _needShow = true; //TODO discuss, check intial version of the app
               _createWebViewController(_uwr ?? '');
             });
           }
@@ -180,12 +190,14 @@ class _WebViewPageState extends State<WebViewPage> {
     );
   }
 
-  Future<NavigationDecision> _overrideUrlLoading(NavigationRequest request) async {
+  Future<NavigationDecision> _overrideUrlLoading(
+      NavigationRequest request) async {
     var url = request.url.toString();
 
     var uri = Uri.parse(url);
 
-    if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
+    if (!["http", "https", "file", "chrome", "data", "javascript", "about"]
+        .contains(uri.scheme)) {
       if (await canLaunchUrl(uri)) {
         // Launch the App
         await launchUrl(uri);
@@ -196,7 +208,8 @@ class _WebViewPageState extends State<WebViewPage> {
     }
 
     if (url.contains(widget.forceWhiteUrl)) {
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      await SystemChrome.setPreferredOrientations(
+          [DeviceOrientation.portraitUp]);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
