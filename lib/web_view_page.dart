@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:developer';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -6,9 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:web_view_package/internet_helper.dart';
 import 'package:web_view_package/no_internet_page_creator.dart';
-import 'package:web_view_package/shared_prefs_checker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
@@ -34,14 +34,11 @@ class WebViewPage extends StatefulWidget {
   ///       );
   final Function(BuildContext context) navigateToWhite;
 
-  final String initialUrl;
-
   const WebViewPage(
       {Key? key,
       required this.noInternetPageCreator,
       required this.forceWhiteUrl,
-      required this.navigateToWhite,
-      required this.initialUrl})
+      required this.navigateToWhite})
       : super(key: key);
 
   static const routeName = '/webview';
@@ -53,12 +50,7 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
-  bool _isShowingTerms = false; // are we showing terms in widget right now
-  // if false we automatically go to white part when reach terms url
-  bool _needShowTerms = true;
-  bool _termsAccepted = false;
-  SharedPrefsChecker sharedPrefsChecker = SharedPrefsChecker();
-  int redirectCounter = 0;
+  String? _uwr;
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -69,7 +61,10 @@ class _WebViewPageState extends State<WebViewPage> {
     return false;
   }
 
-  void _createWebViewController() {
+  void _createWebViewController(String url) {
+    if (context.mounted && url == widget.forceWhiteUrl) {
+      widget.navigateToWhite(context);
+    }
     final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
       params = WebKitWebViewControllerCreationParams(
@@ -95,7 +90,8 @@ class _WebViewPageState extends State<WebViewPage> {
 
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
-      AndroidWebViewController androidWebViewController = (_webViewController!.platform as AndroidWebViewController);
+      AndroidWebViewController androidWebViewController =
+          (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -104,12 +100,15 @@ class _WebViewPageState extends State<WebViewPage> {
         // Control and show your picker
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
-        final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
+        final XFile? photo =
+            await picker.pickImage(source: ImageSource.gallery);
 
-        return photo?.path != null ? [Uri.file(photo!.path).toString()] : []; // Uris
+        return photo?.path != null
+            ? [Uri.file(photo!.path).toString()]
+            : []; // Uris
       });
     }
-    _webViewController?.loadRequest(Uri.parse(widget.initialUrl));
+    _webViewController?.loadRequest(Uri.parse(url));
   }
 
   @override
@@ -117,33 +116,31 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
-      _needShowTerms = await sharedPrefsChecker.isShowTermsView();
       await SystemChrome.setPreferredOrientations([]);
 
-      final hasInternet = await InternetHelper.checkInternetConnection();
-      if (hasInternet) {
-        setState(() {
-          _createWebViewController();
-        });
-      } else {
+      var connectivityResult = await (Connectivity().checkConnectivity());
+      if (connectivityResult == ConnectivityResult.none) {
         _showNoWifiDialog();
+      } else {
+        _uwr = ModalRoute.of(context)?.settings.arguments as String;
+        setState(() {
+          _createWebViewController(_uwr ?? '');
+        });
       }
 
-      subscription = Connectivity().onConnectivityChanged.listen((_) async {
-        await Future.delayed(const Duration(seconds: 1));
-        final hasInternet = await InternetHelper.checkInternetConnection();
-        if (mounted) {
-          if (hasInternet) {
-            if (_webViewController == null) {
-              setState(() {
-                _createWebViewController();
-              });
-            }
-            SmartDialog.dismiss();
-            await SystemChrome.setPreferredOrientations([]);
-          } else {
-            _showNoWifiDialog();
+      subscription = Connectivity()
+          .onConnectivityChanged
+          .listen((ConnectivityResult result) {
+        if (result == ConnectivityResult.none) {
+          _showNoWifiDialog();
+        } else {
+          if (_uwr == null && _webViewController == null) {
+            setState(() {
+              _uwr = ModalRoute.of(context)?.settings.arguments as String;
+              _createWebViewController(_uwr ?? '');
+            });
           }
+          SmartDialog.dismiss();
         }
       });
     });
@@ -157,124 +154,50 @@ class _WebViewPageState extends State<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _isShowingTerms ? _buildIsShowingTerms(context) : _buildGrPt(context);
-  }
-
-  Widget _buildGrPt(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Stack(
-            children: [
-              _webViewController != null
+        child: Stack(
+          children: [
+            Scaffold(
+              backgroundColor: Colors.transparent,
+              body: _webViewController != null
                   ? SafeArea(
                       child: WebViewWidget(controller: _webViewController!),
                     )
-                  : const SizedBox.shrink(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIsShowingTerms(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        bottomNavigationBar: Container(
-          width: double.infinity,
-          height: 155,
-          color: const Color(0xffF2F2F7),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Transform.scale(
-                    scale: 1.5,
-                    child: Checkbox(
-                        activeColor: const Color(0xFF4FD720),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4.0),
-                        ),
-                        side: MaterialStateBorderSide.resolveWith(
-                          (states) => const BorderSide(width: 2.0, color: Color(0xFF29B550)),
-                        ),
-                        value: _termsAccepted,
-                        onChanged: (bool? value) {
-                          setState(() {
-                            _termsAccepted = value ?? false;
-                          });
-                        }),
-                  ),
-                  const Text(
-                    'Agree with Terms of use',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xff484040),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(
-                height: 12,
-              ),
-              InkWell(
-                onTap: _termsAccepted
-                    ? () {
-                        sharedPrefsChecker.setShowTermsView(false);
-                        widget.navigateToWhite(context);
-                      }
-                    : null,
-                child: Container(
-                  height: 55,
-                  width: 361,
-                  decoration: BoxDecoration(
-                    color: _termsAccepted ? const Color(0xff365BDC) : const Color(0xffD5D5DC),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Continue',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 34)
-            ],
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            _webViewController != null
-                ? SafeArea(
-                    child: WebViewWidget(controller: _webViewController!),
-                  )
-                : const SizedBox.shrink(),
+                  : const SizedBox(),
+            ),
+            //TODO
+            // if (!_needShow) ...[
+            //   Scaffold(
+            //     backgroundColor: const Color(0xFF0E0065),
+            //     body:
+            //         Center(
+            //           child: SizedBox(
+            //             height: 188,
+            //             width: 188,
+            //             child: Image.asset(
+            //               Assets.assetsLogo,
+            //             ),
+            //           ),
+            //         ),
+            //   ),
+            // ],
           ],
         ),
       ),
     );
   }
 
-  Future<NavigationDecision> _overrideUrlLoading(NavigationRequest request) async {
-    if (_isShowingTerms) {
-      return NavigationDecision.navigate;
-    }
-
+  Future<NavigationDecision> _overrideUrlLoading(
+      NavigationRequest request) async {
     var url = request.url.toString();
 
     var uri = Uri.parse(url);
 
-    if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
+    if (!["http", "https", "file", "chrome", "data", "javascript", "about"]
+        .contains(uri.scheme)) {
       if (await canLaunchUrl(uri)) {
         // Launch the App
         await launchUrl(uri);
@@ -284,35 +207,15 @@ class _WebViewPageState extends State<WebViewPage> {
       return NavigationDecision.prevent;
     }
 
-    if (url.contains('terms')) {
-      if (_needShowTerms) {
-        setState(() {
-          _isShowingTerms = true;
-        });
-        return NavigationDecision.navigate;
-      } else {
-        if (context.mounted) {
-          widget.navigateToWhite(context);
-        }
-        return NavigationDecision.prevent;
-      }
-    }
-
     if (url.contains(widget.forceWhiteUrl)) {
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      await SystemChrome.setPreferredOrientations(
+          [DeviceOrientation.portraitUp]);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
       _webViewController = null;
       return NavigationDecision.prevent;
     } else {
-      //The first url is binom. Then we get the real url.
-      //If this is GP url then we reset ShowTermsView flag in shared prefs
-      if (redirectCounter >= 1 && !_needShowTerms) {
-        _needShowTerms = true;
-        sharedPrefsChecker.setShowTermsView(_needShowTerms);
-      }
-      redirectCounter++;
       return NavigationDecision.navigate;
     }
   }
@@ -321,6 +224,11 @@ class _WebViewPageState extends State<WebViewPage> {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SmartDialog.show<String>(
       builder: (_) => widget.noInternetPageCreator.createNoInternetPage(() {
+        if (_uwr == null) {
+          setState(() {
+            _uwr = ModalRoute.of(context)?.settings.arguments as String;
+          });
+        }
         SmartDialog.dismiss();
       }),
       animationType: SmartAnimationType.centerFade_otherSlide,
