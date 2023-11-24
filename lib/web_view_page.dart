@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +7,20 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_view_package/no_internet_page_creator.dart';
+import 'package:web_view_package/shared_prefs_manager.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+
+const List<String> allowedSchemes = [
+  "http",
+  "https",
+  "file",
+  "chrome",
+  "data",
+  "javascript",
+  "about"
+];
 
 class WebViewPage extends StatefulWidget {
   final NoInternetPageCreator noInternetPageCreator;
@@ -51,6 +60,9 @@ class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
   String? _uwr;
+  int _loadCounter = 0;
+  String _savedRedirectUrl = '';
+  String _savedLastUrl = '';
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -108,13 +120,17 @@ class _WebViewPageState extends State<WebViewPage> {
             : []; // Uris
       });
     }
+    _loadCounter = 0;
     _webViewController?.loadRequest(Uri.parse(url));
   }
 
   @override
   void initState() {
     super.initState();
-
+    SharedPrefsManager.getRedirectUrl()
+        .then((String value) => _savedRedirectUrl = value);
+    SharedPrefsManager.getLastUrl()
+        .then((String value) => _savedLastUrl = value);
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       await SystemChrome.setPreferredOrientations([]);
 
@@ -122,7 +138,9 @@ class _WebViewPageState extends State<WebViewPage> {
       if (connectivityResult == ConnectivityResult.none) {
         _showNoWifiDialog();
       } else {
-        _uwr = ModalRoute.of(context)?.settings.arguments as String;
+        _uwr = context.mounted
+            ? ModalRoute.of(context)?.settings.arguments as String
+            : '';
         setState(() {
           _createWebViewController(_uwr ?? '');
         });
@@ -168,41 +186,50 @@ class _WebViewPageState extends State<WebViewPage> {
                     )
                   : const SizedBox(),
             ),
-            //TODO
-            // if (!_needShow) ...[
-            //   Scaffold(
-            //     backgroundColor: const Color(0xFF0E0065),
-            //     body:
-            //         Center(
-            //           child: SizedBox(
-            //             height: 188,
-            //             width: 188,
-            //             child: Image.asset(
-            //               Assets.assetsLogo,
-            //             ),
-            //           ),
-            //         ),
-            //   ),
-            // ],
           ],
         ),
       ),
     );
   }
 
+  /// Here we will check if binom link matches previous one
+  /// and save loaded url as last loaded
+  ///
+  /// Return:
+  /// Url to load further. This can be last loaded url of the previous session
+  String _processLastUrl(String url) {
+    //one - open initial link
+    //two - open redirect link
+    if (++_loadCounter == 2) {
+      if (_savedRedirectUrl != url || _savedLastUrl.isEmpty) {
+        SharedPrefsManager.saveRedirectUrl(url);
+        SharedPrefsManager.saveLastUrl('');
+        _savedLastUrl = '';
+        _savedRedirectUrl = url;
+      } else {
+        return _savedLastUrl;
+      }
+    }
+
+    if (_loadCounter > 2) {
+      SharedPrefsManager.saveLastUrl(url);
+    }
+    return url;
+  }
+
   Future<NavigationDecision> _overrideUrlLoading(
       NavigationRequest request) async {
-    var url = request.url.toString();
+    String url = request.url.toString();
 
-    var uri = Uri.parse(url);
+    Uri uri = Uri.parse(_processLastUrl(url));
 
-    if (!["http", "https", "file", "chrome", "data", "javascript", "about"]
-        .contains(uri.scheme)) {
+    if (!allowedSchemes.contains(uri.scheme)) {
+      //This is a custom deeplink scheme
       if (await canLaunchUrl(uri)) {
-        // Launch the App
+        // Launch the target app
         await launchUrl(uri);
-        // and cancel the request
       }
+      // and cancel the request
       _webViewController = null;
       return NavigationDecision.prevent;
     }
