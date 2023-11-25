@@ -43,12 +43,15 @@ class WebViewPage extends StatefulWidget {
   ///       );
   final Function(BuildContext context) navigateToWhite;
 
+  /// This is url read from Firebase
+  final String initialUrl;
+
   const WebViewPage(
-      {Key? key,
+      {super.key,
       required this.noInternetPageCreator,
       required this.forceWhiteUrl,
-      required this.navigateToWhite})
-      : super(key: key);
+      required this.navigateToWhite,
+      required this.initialUrl});
 
   static const routeName = '/webview';
 
@@ -59,7 +62,6 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
-  String? _uwr;
   int _loadCounter = 0;
   String _savedRedirectUrl = '';
   String _savedLastUrl = '';
@@ -138,11 +140,8 @@ class _WebViewPageState extends State<WebViewPage> {
       if (connectivityResult == ConnectivityResult.none) {
         _showNoWifiDialog();
       } else {
-        _uwr = context.mounted
-            ? ModalRoute.of(context)?.settings.arguments as String
-            : '';
         setState(() {
-          _createWebViewController(_uwr ?? '');
+          _createWebViewController(widget.initialUrl);
         });
       }
 
@@ -152,10 +151,9 @@ class _WebViewPageState extends State<WebViewPage> {
         if (result == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
-          if (_uwr == null && _webViewController == null) {
+          if (_webViewController == null) {
             setState(() {
-              _uwr = ModalRoute.of(context)?.settings.arguments as String;
-              _createWebViewController(_uwr ?? '');
+              _createWebViewController(widget.initialUrl);
             });
           }
           SmartDialog.dismiss();
@@ -251,11 +249,6 @@ class _WebViewPageState extends State<WebViewPage> {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SmartDialog.show<String>(
       builder: (_) => widget.noInternetPageCreator.createNoInternetPage(() {
-        if (_uwr == null) {
-          setState(() {
-            _uwr = ModalRoute.of(context)?.settings.arguments as String;
-          });
-        }
         SmartDialog.dismiss();
       }),
       animationType: SmartAnimationType.centerFade_otherSlide,
