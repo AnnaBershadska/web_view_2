@@ -43,15 +43,11 @@ class WebViewPage extends StatefulWidget {
   ///       );
   final Function(BuildContext context) navigateToWhite;
 
-  /// Pass here the url recived after all redirects(the "binom url")
-  final String initialUrl;
-
   const WebViewPage(
       {Key? key,
       required this.noInternetPageCreator,
       required this.forceWhiteUrl,
-      required this.navigateToWhite,
-      required this.initialUrl})
+      required this.navigateToWhite})
       : super(key: key);
 
   static const routeName = '/webview';
@@ -63,9 +59,10 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   WebViewController? _webViewController;
   StreamSubscription? subscription;
+  String? _uwr;
+  int _loadCounter = 0;
   String _savedRedirectUrl = '';
   String _savedLastUrl = '';
-  bool _isFirstUrl = true;
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -77,7 +74,7 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _createWebViewController(String url) {
-    if (context.mounted && url.contains(widget.forceWhiteUrl)) {
+    if (context.mounted && url == widget.forceWhiteUrl) {
       widget.navigateToWhite(context);
     }
     final PlatformWebViewControllerCreationParams params;
@@ -111,6 +108,9 @@ class _WebViewPageState extends State<WebViewPage> {
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
       androidWebViewController.setOnShowFileSelector((params) async {
+        //TODO do everything here
+        // Control and show your picker
+        // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
         final XFile? photo =
             await picker.pickImage(source: ImageSource.gallery);
@@ -120,6 +120,7 @@ class _WebViewPageState extends State<WebViewPage> {
             : []; // Uris
       });
     }
+    _loadCounter = 0;
     _webViewController?.loadRequest(Uri.parse(url));
   }
 
@@ -137,8 +138,11 @@ class _WebViewPageState extends State<WebViewPage> {
       if (connectivityResult == ConnectivityResult.none) {
         _showNoWifiDialog();
       } else {
+        _uwr = context.mounted
+            ? ModalRoute.of(context)?.settings.arguments as String
+            : '';
         setState(() {
-          _createWebViewController(widget.initialUrl);
+          _createWebViewController(_uwr ?? '');
         });
       }
 
@@ -148,9 +152,10 @@ class _WebViewPageState extends State<WebViewPage> {
         if (result == ConnectivityResult.none) {
           _showNoWifiDialog();
         } else {
-          if (_webViewController == null) {
+          if (_uwr == null && _webViewController == null) {
             setState(() {
-              _createWebViewController(widget.initialUrl);
+              _uwr = ModalRoute.of(context)?.settings.arguments as String;
+              _createWebViewController(_uwr ?? '');
             });
           }
           SmartDialog.dismiss();
@@ -193,21 +198,21 @@ class _WebViewPageState extends State<WebViewPage> {
   /// Return:
   /// Url to load further. This can be last loaded url of the previous session
   String _processLastUrl(String url) {
-    try {
-      if (_isFirstUrl) {
-        if (_savedRedirectUrl != url || _savedLastUrl.isEmpty) {
-          SharedPrefsManager.saveRedirectUrl(url);
-          SharedPrefsManager.saveLastUrl('');
-          _savedLastUrl = '';
-          _savedRedirectUrl = url;
-        } else {
-          return _savedLastUrl;
-        }
+    //one - open initial link
+    //two - open redirect link
+    if (++_loadCounter == 2) {
+      if (_savedRedirectUrl != url || _savedLastUrl.isEmpty) {
+        SharedPrefsManager.saveRedirectUrl(url);
+        SharedPrefsManager.saveLastUrl('');
+        _savedLastUrl = '';
+        _savedRedirectUrl = url;
       } else {
-        SharedPrefsManager.saveLastUrl(url);
+        return _savedLastUrl;
       }
-    } finally {
-      _isFirstUrl = false;
+    }
+
+    if (_loadCounter > 2) {
+      SharedPrefsManager.saveLastUrl(url);
     }
     return url;
   }
@@ -246,6 +251,11 @@ class _WebViewPageState extends State<WebViewPage> {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SmartDialog.show<String>(
       builder: (_) => widget.noInternetPageCreator.createNoInternetPage(() {
+        if (_uwr == null) {
+          setState(() {
+            _uwr = ModalRoute.of(context)?.settings.arguments as String;
+          });
+        }
         SmartDialog.dismiss();
       }),
       animationType: SmartAnimationType.centerFade_otherSlide,
