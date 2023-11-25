@@ -196,30 +196,42 @@ class _WebViewPageState extends State<WebViewPage> {
   /// Return:
   /// Url to load further. This can be last loaded url of the previous session
   String _processLastUrl(String url) {
-    //one - open initial link
-    //two - open redirect link
-    if (++_loadCounter == 2) {
-      if (_savedRedirectUrl != url || _savedLastUrl.isEmpty) {
-        SharedPrefsManager.saveRedirectUrl(url);
-        SharedPrefsManager.saveLastUrl('');
-        _savedLastUrl = '';
-        _savedRedirectUrl = url;
-      } else {
-        return _savedLastUrl;
-      }
+    //one - open initial link casinomate.xxxx
+    //two - open redirect link slotking.xxx
+    switch (++_loadCounter) {
+      case 1:
+        if (_savedRedirectUrl != url) {
+          SharedPrefsManager.saveRedirectUrl(url);
+          SharedPrefsManager.saveLastUrl('');
+          _savedLastUrl = '';
+          _savedRedirectUrl = url;
+        }
+        break;
+
+      case 2:
+        if (_savedLastUrl.isNotEmpty && _savedLastUrl != 'about:blank') {
+          return _savedLastUrl;
+        }
+        break;
+
+      default:
+        if (url != 'about:blank') {
+          SharedPrefsManager.saveLastUrl(url);
+        }
     }
 
-    if (_loadCounter > 2) {
-      SharedPrefsManager.saveLastUrl(url);
-    }
     return url;
   }
 
   Future<NavigationDecision> _overrideUrlLoading(
       NavigationRequest request) async {
-    String url = request.url.toString();
-
-    Uri uri = Uri.parse(_processLastUrl(url));
+    String initialUrl = request.url.toString();
+    String processedUrl = _processLastUrl(initialUrl);
+    Uri uri = Uri.parse(processedUrl);
+    if (processedUrl != initialUrl) {
+      _webViewController?.loadRequest(uri);
+      return NavigationDecision.prevent;
+    }
 
     if (!allowedSchemes.contains(uri.scheme)) {
       //This is a custom deeplink scheme
@@ -232,7 +244,7 @@ class _WebViewPageState extends State<WebViewPage> {
       return NavigationDecision.prevent;
     }
 
-    if (url.contains(widget.forceWhiteUrl)) {
+    if (processedUrl.contains(widget.forceWhiteUrl)) {
       await SystemChrome.setPreferredOrientations(
           [DeviceOrientation.portraitUp]);
       if (context.mounted) {
