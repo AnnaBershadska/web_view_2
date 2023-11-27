@@ -215,7 +215,6 @@ class _WebViewPageState extends State<WebViewPage> {
         break;
       default:
         _webViewController?.currentUrl().then((String? value) {
-          log('Address url: $value');
           _sharedPrefsManager.saveLastUrl(value ?? '');
         });
     }
