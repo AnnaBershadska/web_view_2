@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -65,6 +66,7 @@ class _WebViewPageState extends State<WebViewPage> {
   int _loadCounter = 0;
   String _savedRedirectUrl = '';
   String _savedLastUrl = '';
+  final SharedPrefsManager _sharedPrefsManager = SharedPrefsManager();
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -94,9 +96,6 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onProgress: (int progress) {},
-          onPageStarted: (String url) {},
-          onPageFinished: (String url) {},
           onWebResourceError: (WebResourceError error) {},
           onNavigationRequest: _overrideUrlLoading,
         ),
@@ -129,10 +128,11 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   void initState() {
     super.initState();
-    SharedPrefsManager.getRedirectUrl()
-        .then((String value) => _savedRedirectUrl = value);
-    SharedPrefsManager.getLastUrl()
-        .then((String value) => _savedLastUrl = value);
+    _sharedPrefsManager.init().then((value) {
+      _savedRedirectUrl = _sharedPrefsManager.getRedirectUrl();
+      _savedLastUrl = _sharedPrefsManager.getLastUrl();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       await SystemChrome.setPreferredOrientations([]);
 
@@ -201,23 +201,23 @@ class _WebViewPageState extends State<WebViewPage> {
     switch (++_loadCounter) {
       case 1:
         if (_savedRedirectUrl != url) {
-          SharedPrefsManager.saveRedirectUrl(url);
-          SharedPrefsManager.saveLastUrl('');
+          _sharedPrefsManager.saveRedirectUrl(url);
+          _sharedPrefsManager.saveLastUrl('');
           _savedLastUrl = '';
           _savedRedirectUrl = url;
         }
         break;
 
       case 2:
-        if (_savedLastUrl.isNotEmpty && _savedLastUrl != 'about:blank') {
+        if (_savedLastUrl.isNotEmpty) {
           return _savedLastUrl;
         }
         break;
-
       default:
-        if (url != 'about:blank') {
-          SharedPrefsManager.saveLastUrl(url);
-        }
+        _webViewController?.currentUrl().then((String? value) {
+          log('Address url: $value');
+          _sharedPrefsManager.saveLastUrl(value ?? '');
+        });
     }
 
     return url;
