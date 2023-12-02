@@ -79,8 +79,12 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _createWebViewController(String url) {
-    if (context.mounted && url == widget.forceWhiteUrl) {
+    if (context.mounted &&
+        (!_sharedPrefsManager.getWebViewEnabled() ||
+            url == widget.forceWhiteUrl)) {
       widget.navigateToWhite(context);
+      _sharedPrefsManager.setWebViewEnabled(false);
+      return;
     }
     final PlatformWebViewControllerCreationParams params;
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
@@ -270,6 +274,7 @@ class _WebViewPageState extends State<WebViewPage> {
     if (processedUrl.contains(widget.forceWhiteUrl)) {
       await SystemChrome.setPreferredOrientations(
           [DeviceOrientation.portraitUp]);
+      _sharedPrefsManager.setWebViewEnabled(false);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
