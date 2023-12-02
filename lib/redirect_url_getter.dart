@@ -29,7 +29,11 @@ class RedirectUrlGetter {
         followRedirects: true,
       ),
     );
-    final RedirectRecord location = response.redirects.last;
-    return location.location.toString();
+    if (response.redirects.isNotEmpty) {
+      final RedirectRecord location = response.redirects.last;
+      return location.location.toString();
+    } else {
+      return '';
+    }
   }
 }
