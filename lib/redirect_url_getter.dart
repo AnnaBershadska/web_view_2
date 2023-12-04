@@ -31,7 +31,7 @@ class RedirectUrlGetter {
     );
     if (response.redirects.isNotEmpty) {
       final RedirectRecord location = response.redirects.last;
-      return location.location.toString();
+      return '${location.location}/';
     } else {
       return '';
     }

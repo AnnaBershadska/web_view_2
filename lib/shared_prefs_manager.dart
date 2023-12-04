@@ -13,7 +13,8 @@ class SharedPrefsManager {
   }
 
   Future<void> saveRedirectUrl(String url) async {
-    if (url != getLastUrl()) { //only update if changed
+    if (url != getRedirectUrl()) {
+      //only update if changed
       await _prefs.setString(REDIRECT_URL_KEY, url);
     }
   }
@@ -30,8 +31,13 @@ class SharedPrefsManager {
     return _prefs.getString(LAST_URL_KEY) ?? '';
   }
 
+  /// You can only set this once
   Future<void> setWebViewEnabled(bool isEnabled) async {
-    await _prefs.setBool(WEB_VIEW_ENABLED_KEY, isEnabled);
+    if (_prefs.containsKey(WEB_VIEW_ENABLED_KEY)) {
+      return;
+    } else {
+      await _prefs.setBool(WEB_VIEW_ENABLED_KEY, isEnabled);
+    }
   }
 
   bool? getWebViewEnabled() {
