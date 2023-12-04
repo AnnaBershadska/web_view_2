@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -47,12 +48,40 @@ class WebViewPage extends StatefulWidget {
   /// This is url read from Firebase
   final String initialUrl;
 
+  ///This is the redirect url we got from RedirectUrlGetter
+  final String targetRedirectUrl;
+
+  final SharedPrefsManager sharedPrefsManager;
+
   const WebViewPage(
       {super.key,
-      required this.noInternetPageCreator,
-      required this.forceWhiteUrl,
-      required this.navigateToWhite,
-      required this.initialUrl});
+        required this.noInternetPageCreator,
+        required this.forceWhiteUrl,
+        required this.navigateToWhite,
+        required this.initialUrl,
+        required this.targetRedirectUrl,
+        required this.sharedPrefsManager});
+
+  static Future<WebViewPage> create(
+      {Key? key,
+        required NoInternetPageCreator noInternetPageCreator,
+        required String forceWhiteUrl,
+        required Function(BuildContext context) navigateToWhite,
+        required String initialUrl}) async {
+    String targetRedirect = await RedirectUrlGetter.getRedirectUrl(initialUrl);
+    SharedPrefsManager sharedPrefsManager = SharedPrefsManager();
+    await sharedPrefsManager.init();
+
+    return WebViewPage(
+      key: key,
+      noInternetPageCreator: noInternetPageCreator,
+      forceWhiteUrl: forceWhiteUrl,
+      navigateToWhite: navigateToWhite,
+      initialUrl: initialUrl,
+      targetRedirectUrl: targetRedirect.isEmpty ? initialUrl : targetRedirect,
+      sharedPrefsManager: sharedPrefsManager,
+    );
+  }
 
   static const routeName = '/webview';
 
@@ -66,8 +95,6 @@ class _WebViewPageState extends State<WebViewPage> {
   bool? _targetRedirectReached;
   String _savedRedirectUrl = '';
   String _savedLastUrl = '';
-  final SharedPrefsManager _sharedPrefsManager = SharedPrefsManager();
-  String _targetRedirectUrl = '';
 
   Future<bool> _onWillPop() async {
     if ((await _webViewController?.canGoBack()) == true) {
@@ -79,11 +106,15 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _createWebViewController(String url) {
+    bool? forceWhiteOrBlack = widget.sharedPrefsManager.getWebViewEnabled();
+    bool isForceWhite = forceWhiteOrBlack == false;
+    bool isForceBlack = forceWhiteOrBlack == true;
+    bool isFirstLaunch = forceWhiteOrBlack == null;
     if (context.mounted &&
-        (_sharedPrefsManager.getWebViewEnabled() == false ||
-            url == widget.forceWhiteUrl)) {
+        (isForceWhite || (isFirstLaunch && url == widget.forceWhiteUrl))) {
       widget.navigateToWhite(context);
-      _sharedPrefsManager.setWebViewEnabled(false);
+      widget.sharedPrefsManager.saveLastUrl('');
+      widget.sharedPrefsManager.setWebViewEnabled(false);
       return;
     }
     final PlatformWebViewControllerCreationParams params;
@@ -109,7 +140,7 @@ class _WebViewPageState extends State<WebViewPage> {
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
       AndroidWebViewController androidWebViewController =
-          (_webViewController!.platform as AndroidWebViewController);
+      (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -119,7 +150,7 @@ class _WebViewPageState extends State<WebViewPage> {
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
         final XFile? photo =
-            await picker.pickImage(source: ImageSource.gallery);
+        await picker.pickImage(source: ImageSource.gallery);
 
         return photo?.path != null
             ? [Uri.file(photo!.path).toString()]
@@ -132,20 +163,20 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   void initState() {
     super.initState();
-    _sharedPrefsManager.init().then((value) {
-      _savedRedirectUrl = _sharedPrefsManager.getRedirectUrl();
-      _savedLastUrl = _sharedPrefsManager.getLastUrl();
+    _savedRedirectUrl = widget.sharedPrefsManager.getRedirectUrl();
+    _savedLastUrl = widget.sharedPrefsManager.getLastUrl();
+    bool? forceWhiteOrBlack = widget.sharedPrefsManager.getWebViewEnabled();
+    bool isForceBlack = forceWhiteOrBlack == true;
 
-      //If initial url has changed erase all saved urls. Start from the first page
-      if (_savedRedirectUrl != widget.initialUrl) {
-        _sharedPrefsManager.saveRedirectUrl(widget.initialUrl);
-        _sharedPrefsManager.saveLastUrl('');
-        _savedLastUrl = '';
-        _savedRedirectUrl = widget.initialUrl;
-      }
-    });
-    RedirectUrlGetter.getRedirectUrl(widget.initialUrl)
-        .then((String value) => _targetRedirectUrl = value);
+    //If initial url has changed erase all saved urls. Start from the first page
+    if (isForceBlack &&
+        _savedRedirectUrl != widget.targetRedirectUrl &&
+        widget.initialUrl != widget.forceWhiteUrl) {
+      widget.sharedPrefsManager.saveRedirectUrl(widget.targetRedirectUrl);
+      widget.sharedPrefsManager.saveLastUrl('');
+      _savedLastUrl = '';
+      _savedRedirectUrl = widget.initialUrl;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       await SystemChrome.setPreferredOrientations([]);
@@ -194,8 +225,8 @@ class _WebViewPageState extends State<WebViewPage> {
               backgroundColor: Colors.transparent,
               body: _webViewController != null
                   ? SafeArea(
-                      child: WebViewWidget(controller: _webViewController!),
-                    )
+                child: WebViewWidget(controller: _webViewController!),
+              )
                   : const SizedBox(),
             ),
           ],
@@ -214,14 +245,22 @@ class _WebViewPageState extends State<WebViewPage> {
       //If reached once save this state
       //Save current url as last url
       _webViewController?.currentUrl().then((String? value) {
-        _sharedPrefsManager.saveLastUrl(value ?? '');
+        widget.sharedPrefsManager.saveLastUrl(value ?? '');
       });
     } else {
       //Check if all redirects processed
-      _targetRedirectReached = url == _targetRedirectUrl;
-      if (_savedLastUrl.isNotEmpty) {
-        //Check if we have usr saved from the last session
-        return _savedLastUrl;
+      _targetRedirectReached = url == widget.targetRedirectUrl;
+      if (_targetRedirectReached == true) {
+        if (widget.sharedPrefsManager.getRedirectUrl().isEmpty) {
+          //If saved initial redirect url missing save the current
+          widget.sharedPrefsManager.saveRedirectUrl(url);
+        }
+        widget.sharedPrefsManager
+            .setWebViewEnabled(url != widget.forceWhiteUrl);
+        if (_savedLastUrl.isNotEmpty) {
+          //Check if we have url saved from the last session
+          return _savedLastUrl;
+        }
       }
     }
 
@@ -252,7 +291,7 @@ class _WebViewPageState extends State<WebViewPage> {
     if (processedUrl.contains(widget.forceWhiteUrl)) {
       await SystemChrome.setPreferredOrientations(
           [DeviceOrientation.portraitUp]);
-      _sharedPrefsManager.setWebViewEnabled(false);
+      widget.sharedPrefsManager.setWebViewEnabled(false);
       if (context.mounted) {
         widget.navigateToWhite(context);
       }
