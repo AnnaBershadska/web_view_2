@@ -80,7 +80,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
   void _createWebViewController(String url) {
     if (context.mounted &&
-        (!_sharedPrefsManager.getWebViewEnabled() ||
+        (_sharedPrefsManager.getWebViewEnabled() == false ||
             url == widget.forceWhiteUrl)) {
       widget.navigateToWhite(context);
       _sharedPrefsManager.setWebViewEnabled(false);
@@ -210,41 +210,19 @@ class _WebViewPageState extends State<WebViewPage> {
   /// Return:
   /// Url to load further. This can be last loaded url of the previous session
   String _processLastUrl(String url) {
-    //one - open initial link casinomate.xxxx
-    //two - open redirect link slotking.xxx
-    // switch (++_loadCounter) {
-    //   case 1:
-    //     if (_savedRedirectUrl != url) {
-    //       _sharedPrefsManager.saveRedirectUrl(url);
-    //       _sharedPrefsManager.saveLastUrl('');
-    //       _savedLastUrl = '';
-    //       _savedRedirectUrl = url;
-    //     }
-    //     break;
-    //
-    //   case 2:
-    //     if (_savedLastUrl.isNotEmpty) {
-    //       return _savedLastUrl;
-    //     }
-    //     break;
-    //   default:
-    //     _webViewController?.currentUrl().then((String? value) {
-    //       _sharedPrefsManager.saveLastUrl(value ?? '');
-    //     });
-    // }
-
-    if (_targetRedirectReached == null) {
-      //Check if all redirects processed
-      _targetRedirectReached ??= url == _targetRedirectUrl;
-      if (_savedLastUrl.isNotEmpty) {
-        //Check if we have usr saved from the last session
-        return _savedLastUrl;
-      }
-    } else {
+    if (_targetRedirectReached == true) {
+      //If reached once save this state
       //Save current url as last url
       _webViewController?.currentUrl().then((String? value) {
         _sharedPrefsManager.saveLastUrl(value ?? '');
       });
+    } else {
+      //Check if all redirects processed
+      _targetRedirectReached = url == _targetRedirectUrl;
+      if (_savedLastUrl.isNotEmpty) {
+        //Check if we have usr saved from the last session
+        return _savedLastUrl;
+      }
     }
 
     return url;
