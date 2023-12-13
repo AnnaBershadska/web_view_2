@@ -14,6 +14,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import 'internet_helper.dart';
+
 const List<String> allowedSchemes = [
   "http",
   "https",
@@ -55,19 +57,19 @@ class WebViewPage extends StatefulWidget {
 
   const WebViewPage(
       {super.key,
-        required this.noInternetPageCreator,
-        required this.forceWhiteUrl,
-        required this.navigateToWhite,
-        required this.initialUrl,
-        required this.targetRedirectUrl,
-        required this.sharedPrefsManager});
+      required this.noInternetPageCreator,
+      required this.forceWhiteUrl,
+      required this.navigateToWhite,
+      required this.initialUrl,
+      required this.targetRedirectUrl,
+      required this.sharedPrefsManager});
 
   static Future<WebViewPage> create(
       {Key? key,
-        required NoInternetPageCreator noInternetPageCreator,
-        required String forceWhiteUrl,
-        required Function(BuildContext context) navigateToWhite,
-        required String initialUrl}) async {
+      required NoInternetPageCreator noInternetPageCreator,
+      required String forceWhiteUrl,
+      required Function(BuildContext context) navigateToWhite,
+      required String initialUrl}) async {
     String targetRedirect = await RedirectUrlGetter.getRedirectUrl(initialUrl);
     SharedPrefsManager sharedPrefsManager = SharedPrefsManager();
     await sharedPrefsManager.init();
@@ -140,7 +142,7 @@ class _WebViewPageState extends State<WebViewPage> {
     if (_webViewController?.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
       AndroidWebViewController androidWebViewController =
-      (_webViewController!.platform as AndroidWebViewController);
+          (_webViewController!.platform as AndroidWebViewController);
 
       androidWebViewController.setMediaPlaybackRequiresUserGesture(false);
 
@@ -150,7 +152,7 @@ class _WebViewPageState extends State<WebViewPage> {
         // and return a list of Uris.
         final ImagePicker picker = ImagePicker();
         final XFile? photo =
-        await picker.pickImage(source: ImageSource.gallery);
+            await picker.pickImage(source: ImageSource.gallery);
 
         return photo?.path != null
             ? [Uri.file(photo!.path).toString()]
@@ -181,27 +183,43 @@ class _WebViewPageState extends State<WebViewPage> {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       await SystemChrome.setPreferredOrientations([]);
 
-      var connectivityResult = await (Connectivity().checkConnectivity());
-      if (connectivityResult == ConnectivityResult.none) {
-        _showNoWifiDialog();
-      } else {
+      final hasInternet = await InternetHelper.checkInternetConnection();
+      if (hasInternet) {
         setState(() {
           _createWebViewController(widget.initialUrl);
         });
+      } else {
+        _showNoWifiDialog();
       }
 
-      subscription = Connectivity()
-          .onConnectivityChanged
-          .listen((ConnectivityResult result) {
-        if (result == ConnectivityResult.none) {
-          _showNoWifiDialog();
-        } else {
-          if (_webViewController == null) {
-            setState(() {
-              _createWebViewController(widget.initialUrl);
-            });
+      subscription = Connectivity().onConnectivityChanged.listen((_) async {
+        await Future.delayed(const Duration(seconds: 1));
+        final hasInternet = await InternetHelper.checkInternetConnection();
+        if (mounted) {
+          if (hasInternet) {
+            if (_webViewController == null) {
+              setState(() {
+                _createWebViewController(widget.initialUrl);
+              });
+            }
+            SmartDialog.dismiss();
+            await SystemChrome.setPreferredOrientations([]);
+          } else {
+            _showNoWifiDialog();
           }
-          SmartDialog.dismiss();
+
+          // subscription = Connectivity()
+          //     .onConnectivityChanged
+          //     .listen((ConnectivityResult result) {
+          //   if (result == ConnectivityResult.none) {
+          //     _showNoWifiDialog();
+          //   } else {
+          //     if (_webViewController == null) {
+          //       setState(() {
+          //         _createWebViewController(widget.initialUrl);
+          //       });
+          //     }
+          //     SmartDialog.dismiss();
         }
       });
     });
@@ -225,8 +243,8 @@ class _WebViewPageState extends State<WebViewPage> {
               backgroundColor: Colors.transparent,
               body: _webViewController != null
                   ? SafeArea(
-                child: WebViewWidget(controller: _webViewController!),
-              )
+                      child: WebViewWidget(controller: _webViewController!),
+                    )
                   : const SizedBox(),
             ),
           ],
